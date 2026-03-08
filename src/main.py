@@ -12,20 +12,19 @@ from modules.communication.mqtt_worker import MQTTWorker
 def main():
     p_time = 0
     
-    cam = CameraStream(url=config.CAMERA_URL, width=config.WIDTH, height=config.HEIGHT)
+    cam = CameraStream(source=0, width=config.WIDTH, height=config.HEIGHT, is_local=True)
     detector = YuNetDetector(model_path=config.MODEL_PATH, input_w=config.WIDTH, input_h=config.HEIGHT)
     tracker = PanTiltTracker(input_w=config.WIDTH, input_h=config.HEIGHT, edge_margin=60)
     
-    # Initialize MQTT Worker
     worker = MQTTWorker()
     worker.start()
     
-    # Variables for fatigue warning
     mp_draw = mp.solutions.drawing_utils
     mp_face_mesh = mp.solutions.face_mesh
     face_mesh = mp_face_mesh.FaceMesh(max_num_faces=1, min_detection_confidence=0.5, min_tracking_confidence=0.5)
     spec_green = mp_draw.DrawingSpec(color=config.COLOR_GREEN, thickness=1, circle_radius=1)
     spec_blue = mp_draw.DrawingSpec(color=config.COLOR_BLUE, thickness=1, circle_radius=1)
+    
     sleep_counter = 0
     yawn_counter = 0
     status = "Awake & Focused"
@@ -49,13 +48,12 @@ def main():
             frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             results = face_mesh.process(frame_rgb)
             
-            # feature/fatigue_warning
             if results.multi_face_landmarks:
                 frame, avg_ear, mar, sleep_counter, yawn_counter, status, status_color, status_code = analyze_fatigue(
                     frame, results, w, h, sleep_counter, yawn_counter, 
                     mp_draw, mp_face_mesh, spec_green, spec_blue
                 )
-                # 1. Check Fatigue (Tính năng 1)
+                
                 if status_code != last_status_code:
                     if status_code != 0:
                         worker.publish("robot/status", {"code": status_code})
@@ -78,6 +76,7 @@ def main():
         if cv2.waitKey(1) & 0xFF == ord('q'): 
             break
 
+    worker.stop()
     cam.release()
     cv2.destroyAllWindows()
 
